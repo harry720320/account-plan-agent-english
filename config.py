@@ -3,16 +3,21 @@ Configuration file
 """
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load .env file and override existing environment variables
+load_dotenv(override=True)
+
 try:
     from pydantic_settings import BaseSettings
-    from pydantic import ConfigDict
+    from pydantic import ConfigDict, Field
 except ImportError:
-    from pydantic import BaseSettings
+    from pydantic import BaseSettings, Field
     from pydantic import BaseConfig as ConfigDict
 
 class Settings(BaseSettings):
     # OpenAI API Configuration
-    openai_api_key: str = ""
+    openai_api_key: str = Field(alias="OPENAI_API_KEY")
     
     # Database Configuration
     database_url: str = "sqlite:///./account_plan_agent.db"
@@ -80,5 +85,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
 
 settings = Settings()
