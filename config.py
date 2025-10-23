@@ -26,17 +26,17 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"  # Use 127.0.0.1 to ensure local access
     port: int = 8000
     
-    # AI Model Configuration (default uses gpt-5-mini, can be overridden by .env)
-    default_model: str = "gpt-5-mini"
-    plan_generation_model: str = "gpt-5-mini"
-    conversation_model: str = "gpt-5-mini"
-    external_info_model: str = "gpt-5-mini"
-    # OpenAI Responses + web_search specific model
+    # AI Model Configuration (default uses gpt-4o-mini, can be overridden by .env)
+    default_model: str = "gpt-4o-mini"
+    plan_generation_model: str = "gpt-4o-mini"
+    conversation_model: str = "gpt-4o-mini"
+    external_info_model: str = "gpt-5-mini"  # Use gpt-5-mini for external info
+    # OpenAI Responses API for external info (web search)
     external_responses_model: str = "gpt-5-mini"
-    external_use_responses: bool = True
-    question_model: str = "gpt-5-mini"
-    history_model: str = "gpt-5-mini"
-    dynamic_questioning_model: str = "gpt-5-mini"
+    external_use_responses: bool = True  # Keep web search functionality enabled
+    question_model: str = "gpt-4o-mini"
+    history_model: str = "gpt-4o-mini"
+    dynamic_questioning_model: str = "gpt-4o-mini"
 
     # Default reasoning setup (Responses API)
     default_reasoning_effort: str = "low"

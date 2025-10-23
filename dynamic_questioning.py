@@ -123,14 +123,17 @@ class DynamicQuestioning:
             Return results in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.dynamic_questioning_model,
-                instructions=Prompts.CRM_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.dynamic_questioning_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CRM_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 missing_info = json.loads(result)
                 return missing_info
@@ -177,14 +180,17 @@ class DynamicQuestioning:
             Return results in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.dynamic_questioning_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.dynamic_questioning_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 questions = json.loads(result)
                 return questions if isinstance(questions, list) else []
@@ -217,14 +223,17 @@ class DynamicQuestioning:
             Return question list in JSON array format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.dynamic_questioning_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.dynamic_questioning_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 questions = json.loads(result)
                 return questions if isinstance(questions, list) else []
@@ -343,14 +352,17 @@ class DynamicQuestioning:
             If no adjustment is needed, return the original question.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.dynamic_questioning_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.dynamic_questioning_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=1000
             )
             
-            adapted_text = (self._extract_responses_text(response) or "").strip()
+            adapted_text = (response.choices[0].message.content or "").strip()
             
             return {
                 "id": question["id"],
@@ -371,30 +383,6 @@ class DynamicQuestioning:
                 "error": str(e)
             }
 
-    def _extract_responses_text(self, response: Any) -> str:
-        text = getattr(response, "output_text", None)
-        if text:
-            return text
-        for attr in ("content", "output"):
-            container = getattr(response, attr, None)
-            if container:
-                parts: List[str] = []
-                def walk(node: Any):
-                    if isinstance(node, dict):
-                        if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                            parts.append(str(node["text"]["value"]))
-                        for v in node.values():
-                            walk(v)
-                    elif isinstance(node, list):
-                        for v in node:
-                            walk(v)
-                walk(container)
-                if parts:
-                    return "\n".join(parts)
-        try:
-            return response.choices[0].message.content
-        except Exception:
-            return ""
     
     async def generate_question_flow(self, 
                                    db: Session, 

@@ -143,14 +143,17 @@ class QuestionManager:
             Return question list in JSON array format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.question_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.question_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 follow_up_questions = json.loads(result)
                 return follow_up_questions if isinstance(follow_up_questions, list) else []
@@ -187,11 +190,14 @@ class QuestionManager:
             Please return extracted information in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.question_model,
-                instructions=Prompts.DATA_EXTRACTION_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.question_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.DATA_EXTRACTION_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
             result = self._extract_responses_text(response)
@@ -243,11 +249,14 @@ class QuestionManager:
             Return in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.question_model,
-                instructions=Prompts.CRM_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.question_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CRM_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
             result = self._extract_responses_text(response)
@@ -269,30 +278,6 @@ class QuestionManager:
                 "analysis": {"error": str(e)}
             }
 
-    def _extract_responses_text(self, response: Any) -> str:
-        text = getattr(response, "output_text", None)
-        if text:
-            return text
-        for attr in ("content", "output"):
-            container = getattr(response, attr, None)
-            if container:
-                parts: List[str] = []
-                def walk(node: Any):
-                    if isinstance(node, dict):
-                        if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                            parts.append(str(node["text"]["value"]))
-                        for v in node.values():
-                            walk(v)
-                    elif isinstance(node, list):
-                        for v in node:
-                            walk(v)
-                walk(container)
-                if parts:
-                    return "\n".join(parts)
-        try:
-            return response.choices[0].message.content
-        except Exception:
-            return ""
     
     async def save_interaction(self, 
                              db: Session, 

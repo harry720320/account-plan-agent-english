@@ -215,14 +215,17 @@ class HistoryManager:
             Return results in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.history_model,
-                instructions=Prompts.CRM_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.history_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CRM_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 analysis = json.loads(result)
                 return analysis.get("relevant_info", [])
@@ -329,11 +332,14 @@ class HistoryManager:
             Return results in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.history_model,
-                instructions=Prompts.HISTORY_ANALYSIS_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.history_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.HISTORY_ANALYSIS_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
             result = self._extract_responses_text(response)
@@ -400,11 +406,14 @@ class HistoryManager:
             Return results in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.history_model,
-                instructions=Prompts.DATA_ANALYST,
-                input=prompt,
-                reasoning={"effort": (settings.history_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.DATA_ANALYST},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
             
             result = self._extract_responses_text(response)
@@ -417,30 +426,6 @@ class HistoryManager:
         except Exception as e:
             return {"error": str(e)}
 
-    def _extract_responses_text(self, response: Any) -> str:
-        text = getattr(response, "output_text", None)
-        if text:
-            return text
-        for attr in ("content", "output"):
-            container = getattr(response, attr, None)
-            if container:
-                parts: List[str] = []
-                def walk(node: Any):
-                    if isinstance(node, dict):
-                        if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                            parts.append(str(node["text"]["value"]))
-                        for v in node.values():
-                            walk(v)
-                    elif isinstance(node, list):
-                        for v in node:
-                            walk(v)
-                walk(container)
-                if parts:
-                    return "\n".join(parts)
-        try:
-            return response.choices[0].message.content
-        except Exception:
-            return ""
             try:
                 changes = json.loads(result)
                 return changes

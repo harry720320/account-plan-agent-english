@@ -445,14 +445,17 @@ IMPORTANT: Make sure to reference and utilize ALL the provided data (customer pr
 Generate the plan in well-structured Markdown format.
 """
 
-            response = client.responses.create(
+            response = client.chat.completions.create(
                 model=settings.plan_generation_model,
-                instructions=Prompts.STRATEGIC_ACCOUNT_MANAGER.format(company_name=company_name),
-                input=prompt,
-                reasoning={"effort": (settings.plan_generation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.STRATEGIC_ACCOUNT_MANAGER.format(company_name=company_name)},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=4000
             )
             
-            return self._extract_responses_text(response)
+            return response.choices[0].message.content
             
         except Exception as e:
             print(f"Error generating plan content with AI: {e}")
@@ -526,30 +529,6 @@ Set clear success metrics and time nodes.
                 context.get("internal_info", {})
             )
 
-    def _extract_responses_text(self, response: Any) -> str:
-        text = getattr(response, "output_text", None)
-        if text:
-            return text
-        for attr in ("content", "output"):
-            container = getattr(response, attr, None)
-            if container:
-                parts: List[str] = []
-                def walk(node: Any):
-                    if isinstance(node, dict):
-                        if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                            parts.append(str(node["text"]["value"]))
-                        for v in node.values():
-                            walk(v)
-                    elif isinstance(node, list):
-                        for v in node:
-                            walk(v)
-                walk(container)
-                if parts:
-                    return "\n".join(parts)
-        try:
-            return response.choices[0].message.content
-        except Exception:
-            return ""
     
     async def _generate_news_summary(self, context: Dict[str, Any]) -> str:
         """Generate news summary"""

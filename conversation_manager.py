@@ -141,14 +141,17 @@ class ConversationManager:
             Please provide a single opening question:
             """
             
-            # gpt-5 uses Responses API
-            response = self.openai_client.responses.create(
+            # Use Chat Completions API
+            response = self.openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.conversation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=1000
             )
-            text = self._extract_responses_text(response)
+            text = response.choices[0].message.content
             return text or "To better understand the situation, please briefly describe the background and current status of this issue."
             
         except Exception as e:
@@ -184,13 +187,16 @@ class ConversationManager:
                 category=category
             )
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions=Prompts.CUSTOMER_MANAGER,
-                input=prompt,
-                reasoning={"effort": (settings.conversation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_MANAGER},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=1000
             )
-            text = self._extract_responses_text(response)
+            text = response.choices[0].message.content
             return text or "Can you specifically explain the key points in the previous answer? For example, which departments, time periods, or goals are involved?"
             
         except Exception as e:
@@ -276,15 +282,16 @@ class ConversationManager:
             # Add current user message
             messages.append({"role": "user", "content": user_message})
             
-            # gpt-5: Use Responses API, concatenate conversation as input
-            conversation_text = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-            response = self.openai_client.responses.create(
+            # Use Chat Completions API for better performance
+            response = self.openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions="You are a professional customer service/customer manager, keep concise and clear English responses.",
-                input=conversation_text,
-                reasoning={"effort": (settings.conversation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": "You are a professional customer service/customer manager, keep concise and clear English responses."}
+                ] + messages,
+                temperature=0.0,
+                max_tokens=1000
             )
-            text = self._extract_responses_text(response)
+            text = response.choices[0].message.content
             return text or "Thank you for the information. Based on this, what do you think is the biggest obstacle that needs to be resolved currently?"
             
         except Exception as e:
@@ -310,13 +317,16 @@ class ConversationManager:
                 conversation_content=conversation_text
             )
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions=Prompts.CONVERSATION_SUMMARY_EXPERT,
-                input=prompt,
-                reasoning={"effort": (settings.conversation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CONVERSATION_SUMMARY_EXPERT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
-            text = self._extract_responses_text(response)
+            text = response.choices[0].message.content
             return text or "(No available summary)"
             
         except Exception as e:
@@ -355,13 +365,16 @@ class ConversationManager:
             Please return the extracted information in JSON format.
             """
             
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions="You are a professional information extraction expert, skilled at extracting structured data from conversations. Please output only JSON.",
-                input=prompt,
-                reasoning={"effort": (settings.conversation_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": "You are a professional information extraction expert, skilled at extracting structured data from conversations. Please output only JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=2000
             )
-            result = self._extract_responses_text(response)
+            result = response.choices[0].message.content
             try:
                 structured_data = json.loads(result)
                 return structured_data
@@ -418,37 +431,6 @@ class ConversationManager:
         except Exception as e:
             raise Exception(f"Save conversation failed: {str(e)}")
 
-    def _extract_responses_text(self, response: Any) -> str:
-        """Compatible with various Responses API return structures, extract pure text."""
-        # 1) Convenient field provided by SDK
-        text = getattr(response, "output_text", None)
-        if text:
-            return text
-        # 2) Deep traverse content/output 
-        for attr in ("content", "output"):
-            try:
-                container = getattr(response, attr, None)
-                if container:
-                    parts: List[str] = []
-                    def walk(node: Any):
-                        if isinstance(node, dict):
-                            if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                                parts.append(str(node["text"]["value"]))
-                            for v in node.values():
-                                walk(v)
-                        elif isinstance(node, list):
-                            for v in node:
-                                walk(v)
-                    walk(container)
-                    if parts:
-                        return "\n".join(parts)
-            except Exception:
-                pass
-        # 3) Compatible with chat.completions structure (error tolerant)
-        try:
-            return response.choices[0].message.content
-        except Exception:
-            return ""
     
     async def get_conversation_history(self, 
                                      db: Session, 

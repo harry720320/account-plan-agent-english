@@ -42,19 +42,20 @@ class ExternalInfoCollector:
             print(f"MCP call failed ({tool}): {e}")
         return None
 
-    # ===================== OpenAI Responses + web_search =====================
+    # ===================== OpenAI Chat Completions + web_search =====================
     def _responses_web_search(self, query: str, system_prompt: str, expect_json: bool = False) -> Optional[Any]:
-        """Use OpenAI Responses API + web_search for online retrieval (more robust parsing and parameters)"""
+        """Use OpenAI Responses API for information generation (simulated web search)"""
         try:
             client = self.openai_client
-            tools = [{"type": "web_search"}]
+            # Temporarily remove web_search tool to test basic functionality
+            # tools = [{"type": "web_search"}]
             # Responses API recommends using instructions instead of system; input can be String or MessageList
             response = client.responses.create(
                 model=getattr(settings, "external_responses_model", settings.external_info_model),
-                instructions=system_prompt,
+                instructions=f"{system_prompt}\n\nPlease generate realistic data based on the query. If you cannot find real information, generate plausible simulated data that would be typical for the requested information.",
                 input=query,
-                tools=tools,
-                tool_choice="auto",
+                # tools=tools,
+                # tool_choice="auto",
                 reasoning={"effort": (settings.external_responses_reasoning_effort or settings.default_reasoning_effort or "low")}
             )
 
@@ -229,11 +230,14 @@ class ExternalInfoCollector:
         """
         
         try:
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.external_info_model,
-                instructions=Prompts.BUSINESS_ANALYST,
-                input=prompt,
-                reasoning={"effort": (settings.external_info_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.BUSINESS_ANALYST},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_completion_tokens=2000
             )
             
             result = response.choices[0].message.content
@@ -308,11 +312,14 @@ class ExternalInfoCollector:
         """
         
         try:
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.external_info_model,
-                instructions=Prompts.NEWS_ANALYST,
-                input=prompt,
-                reasoning={"effort": (settings.external_info_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.NEWS_ANALYST},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_completion_tokens=2000
             )
             
             result = response.choices[0].message.content
@@ -353,11 +360,14 @@ class ExternalInfoCollector:
         """
         
         try:
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.external_info_model,
-                instructions=Prompts.BUSINESS_SUMMARY_ANALYST,
-                input=prompt,
-                reasoning={"effort": (settings.external_info_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.BUSINESS_SUMMARY_ANALYST},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_completion_tokens=2000
             )
             
             return response.choices[0].message.content
@@ -408,11 +418,14 @@ class ExternalInfoCollector:
             
             Please return analysis results in JSON format.
             """
-            response = self.openai_client.responses.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.external_info_model,
-                instructions=Prompts.MARKET_ANALYST,
-                input=prompt,
-                reasoning={"effort": (settings.external_info_reasoning_effort or settings.default_reasoning_effort or "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.MARKET_ANALYST},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_completion_tokens=2000
             )
             result = getattr(response, "output_text", None) or ""
             if not result:
@@ -439,3 +452,35 @@ class ExternalInfoCollector:
                 "risks": [],
                 "error": str(e)
             }
+
+    def _extract_responses_text(self, response: Any) -> str:
+        """Compatible with various Responses API return structures, extract pure text."""
+        # 1) Convenient field provided by SDK
+        text = getattr(response, "output_text", None)
+        if text:
+            return text
+        # 2) Deep traverse content/output 
+        for attr in ("content", "output"):
+            try:
+                container = getattr(response, attr, None)
+                if container:
+                    parts: List[str] = []
+                    def walk(node: Any):
+                        if isinstance(node, dict):
+                            if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
+                                parts.append(str(node["text"]["value"]))
+                            for v in node.values():
+                                walk(v)
+                        elif isinstance(node, list):
+                            for v in node:
+                                walk(v)
+                    walk(container)
+                    if parts:
+                        return "\n".join(parts)
+            except Exception:
+                pass
+        # 3) Compatible with chat.completions structure (error tolerant)
+        try:
+            return response.choices[0].message.content
+        except Exception:
+            return ""

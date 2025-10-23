@@ -900,42 +900,19 @@ async def generate_customer_profile(
         """
         
         try:
-            # Use OpenAI client to generate directly
+            # Use OpenAI Chat Completions API for better performance
             openai_client = openai.OpenAI(api_key=settings.openai_api_key)
-            response = openai_client.responses.create(
+            response = openai_client.chat.completions.create(
                 model=settings.conversation_model,
-                instructions=Prompts.CUSTOMER_ANALYSIS_EXPERT,
-                input=analysis_prompt,
-                reasoning={"effort": getattr(settings, "default_reasoning_effort", "low")}
+                messages=[
+                    {"role": "system", "content": Prompts.CUSTOMER_ANALYSIS_EXPERT},
+                    {"role": "user", "content": analysis_prompt}
+                ],
+                temperature=0.0,
+                max_tokens=4000
             )
             
-            profile_content = getattr(response, "output_text", None)
-            if not profile_content:
-                try:
-                    # Compatible with different structures
-                    content = getattr(response, "content", None) or getattr(response, "output", None)
-                    parts = []
-                    def walk(node):
-                        if isinstance(node, dict):
-                            if "text" in node and isinstance(node["text"], dict) and "value" in node["text"]:
-                                parts.append(str(node["text"]["value"]))
-                            for v in node.values():
-                                walk(v)
-                        elif isinstance(node, list):
-                            for v in node:
-                                walk(v)
-                    if content:
-                        walk(content)
-                    if parts:
-                        profile_content = "\n".join(parts)
-                except Exception:
-                    pass
-            if not profile_content:
-                # Final error tolerance
-                try:
-                    profile_content = response.choices[0].message.content
-                except Exception:
-                    profile_content = ""
+            profile_content = response.choices[0].message.content
             profile = f"# Customer ProfileAnalysisReport\n\n{profile_content}"
             
         except Exception as e:
